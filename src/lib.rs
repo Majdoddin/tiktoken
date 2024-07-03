@@ -73,52 +73,69 @@ fn _byte_pair_merge(ranks: &HashMap<Vec<u8>, Rank>, piece: &[u8]) -> Vec<(usize,
     parts
 }
 
-pub fn byte_pair_encode(piece: &[u8], ranks: &HashMap<Vec<u8>, Rank>) -> Vec<Rank> {
-    // Convert piece to Vec<u8> once at the beginning
-    let piece_vec = piece.to_vec();
+pub struct BytePairEncode {
+    dp: Vec<usize>,
+    backtrack: Vec<usize>,
+}
 
-    let n = piece_vec.len();
-    // initialize dp and backtrack for the trivial single-byte tokenization
-    let mut dp = (1..=n).map(|j| j ).collect::<Vec<_>>();
-    let mut backtrack = (0..n).collect::<Vec<_>>();
-
-    // iteration i sets dp[i] to the size of an optimal tokenization of &piece_vec[0..=i], and
-    // backtrack[i] to the start index of the last token of that tokenization.
-    let mut best: usize = 1;
-    for i in 1..n {
-        if ranks.contains_key(&piece_vec[0..=i]) {
-            dp[i] = 1;
-            backtrack[i] = 0;
-            best = 1;
-            continue;
-        } else if best == 1 {
-            dp[i] = 2;
-            best = 2;
-            continue;
+impl BytePairEncode {
+    pub fn new() -> Self {
+        BytePairEncode {
+            dp: vec![1; 200],
+            backtrack: vec![0; 200 ],
         }
-        for j in 1..i {
-            if (best > dp[j - 1]) && ranks.contains_key(&piece_vec[j..=i]) {
-                best = dp[j - 1];
-                backtrack[i] = j;
+    }
+
+    pub fn byte_pair_encode(&mut self, piece: &[u8], ranks: &HashMap<Vec<u8>, Rank>) -> Vec<Rank> {
+        // Convert piece to Vec<u8> once at the beginning
+        let piece_vec = piece.to_vec();
+        let n = piece_vec.len();
+
+        // no index of dp and backtrack is read before it is set here, except self.dp[0], which is never set
+        if self.dp.len() < n {
+            self.dp.resize(n + 20, 1);
+            self.backtrack.resize(n + 20, 0);
+        }
+
+        // iteration i sets dp[i] to the size of an optimal tokenization of &piece_vec[0..=i], and
+        // backtrack[i] to the start index of the last token of that tokenization.
+        let mut best: usize = 0;
+        for i in 1..n {
+            if ranks.contains_key(&piece_vec[0..=i]) {
+                self.dp[i] = 1;
+                self.backtrack[i] = 0;
+                continue;
             }
+            // self.backtrack[i] = i;
+            if self.dp[i-1] == 1 {
+                self.dp[i] = 2;
+                self.backtrack[i] = i;
+                continue;
+            }
+            best = i-1;
+            for j in 0..i-1 {
+                if (self.dp[best] > self.dp[j]) && ranks.contains_key(&piece_vec[j+1..=i]) {
+                    best = j;
+                }
+            }
+            self.dp[i] = self.dp[best] + 1;
+            self.backtrack[i] = best + 1;
         }
-        best += 1;
-        dp[i] = best;
-    }
 
-    let mut result = Vec::with_capacity(n);
-    let mut idx = n - 1;
-    let mut k = n;
+        let mut result = Vec::with_capacity(n);
+        let mut idx = n - 1;
+        let mut k = n;
 
-    loop {
-        k = backtrack[idx];
-        result.push(ranks[&piece_vec[k..=idx]]);
-        if k == 0 {
-            break;
+        loop {
+            k = self.backtrack[idx];
+            result.push(ranks[&piece_vec[k..=idx]]);
+            if k == 0 {
+                break;
+            }
+            idx = k - 1;
         }
-        idx = k - 1;
+        result
     }
-    result
 }
 
 pub fn byte_pair_split<'a>(piece: &'a [u8], ranks: &HashMap<Vec<u8>, Rank>) -> Vec<&'a [u8]> {
@@ -225,13 +242,15 @@ impl CoreBPE {
     fn _encode_ordinary_native(&self, text: &str) -> Vec<Rank> {
         // This is the core of the encoding logic; the other functions in here
         // just make things complicated :-)
+        let mut encoder = BytePairEncode::new();
+
         let regex = self._get_tl_regex();
         let mut ret = vec![];
         for mat in regex.find_iter(text) {
             let piece = mat.unwrap().as_str().as_bytes();
             match self.encoder.get(piece) {
                 Some(token) => ret.push(*token),
-                None => ret.extend(&byte_pair_encode(piece, &self.encoder)),
+                None => ret.extend(&encoder.byte_pair_encode(piece, &self.encoder)),
             }
         }
         ret
@@ -261,6 +280,7 @@ impl CoreBPE {
                 }
             }
             let end = next_special.map_or(text.len(), |m| m.start());
+            let mut encoder = BytePairEncode::new();
 
             // Okay, here we go, compare this logic to _encode_ordinary_native
             for mat in regex.find_iter(&text[start..end]) {
@@ -270,7 +290,7 @@ impl CoreBPE {
                     ret.push(*token);
                     continue;
                 }
-                let tokens = byte_pair_encode(piece, &self.encoder);
+                let tokens = encoder.byte_pair_encode(piece, &self.encoder);
                 last_piece_token_len = tokens.len();
                 ret.extend(&tokens);
             }
@@ -376,6 +396,8 @@ impl CoreBPE {
         // Now apply even more brute force. At every (other) possible position for the straddling
         // token, concatenate additional bytes from that token (if any) to unstable_bytes,
         // and retokenise the whole thing and see what we get.
+        let mut encoder = BytePairEncode::new();
+
         for i in 1..unstable_bytes.len() {
             let prefix = &unstable_bytes[..i];
             let suffix = &unstable_bytes[i..];
@@ -400,7 +422,7 @@ impl CoreBPE {
                     // would be a regex split before the UTF-8 truncation point.
                     // Probably niche enough that no one will ever notice (after all, people didn't
                     // notice all the big holes in the previous unstable token implementation)
-                    Err(_) => byte_pair_encode(&possibility, &self.encoder),
+                    Err(_) => encoder.byte_pair_encode(&possibility, &self.encoder),
                     // Something like the following is intriguing but incorrect:
                     // Err(e) => self._encode_ordinary_native(unsafe {
                     //     std::str::from_utf8_unchecked(&possibility[..e.valid_up_to()])
@@ -433,11 +455,11 @@ impl CoreBPE {
             if unstable_bytes.len() - last_decoded.1 > 0
                 && last_decoded.0.map_or(false, |c| c.is_whitespace())
             {
-                let mut reencoded = byte_pair_encode(
+                let mut reencoded = encoder.byte_pair_encode(
                     &unstable_bytes[..unstable_bytes.len() - last_decoded.1],
                     &self.encoder,
                 );
-                reencoded.extend(byte_pair_encode(
+                reencoded.extend(encoder.byte_pair_encode(
                     &unstable_bytes[unstable_bytes.len() - last_decoded.1..],
                     &self.encoder,
                 ));
@@ -532,7 +554,10 @@ impl CoreBPE {
                         tokens.truncate(tokens.len() - last_piece_token_len);
                         match self.encoder.get(&unstable_bytes) {
                             Some(token) => tokens.push(*token),
-                            None => tokens.extend(&byte_pair_encode(&unstable_bytes, &self.encoder)),
+                            None => {
+                                let mut encoder = BytePairEncode::new();
+                                tokens.extend(&encoder.byte_pair_encode(&unstable_bytes, &self.encoder));
+                            }
                         }
                     }
                     tokens
@@ -570,7 +595,8 @@ impl CoreBPE {
         if let Some(token) = self.encoder.get(piece) {
             return vec![*token];
         }
-        byte_pair_encode(piece, &self.encoder)
+        let mut encoder = BytePairEncode::new();
+        encoder.byte_pair_encode(piece, &self.encoder)
     }
 
     // ====================
