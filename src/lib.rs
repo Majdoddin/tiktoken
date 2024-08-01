@@ -155,13 +155,13 @@ struct CoreBPE {
     special_tokens_encoder: HashMap<String, Rank>,
     decoder: HashMap<Rank, Vec<u8>>,
     special_tokens_decoder: HashMap<Rank, Vec<u8>>,
-    regex_tls: Vec<Regex>,
+    regex_tls: Vec<reg>,
     special_regex_tls: Vec<Regex>,
     sorted_token_bytes: Vec<Vec<u8>>,
 }
 
 impl CoreBPE {
-    fn _get_tl_regex(&self) -> &Regex {
+    fn _get_tl_regex(&self) -> &reg {
         // See performance notes above for what this is about
         // It's also a little janky, please make a better version of it!
         // However, it's nice that this doesn't leak memory to short-lived threads
@@ -187,18 +187,18 @@ impl CoreBPE {
     fn _encode_ordinary_native(&self, text: &str) -> Vec<Rank> {
         // This is the core of the encoding logic; the other functions in here
         // just make things complicated :-)
-        // let regex = self._get_tl_regex();
-        let pat_str = concat!(
-            r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*[\p{Ll}\p{Lm}\p{Lo}\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?|",
-            r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+[\p{Ll}\p{Lm}\p{Lo}\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?|",
-            r"\p{N}{1,3}|",
-            r" ?[^\s\p{L}\p{N}]+[\r\n/]*|",
-            r"\s*[\r\n]+", //"|",
-        //    r"\s+(?!\S)|",
-        //    r"\s+"
-        );
+        let regex = self._get_tl_regex();
+        // let pat_str = concat!(
+        //     r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*[\p{Ll}\p{Lm}\p{Lo}\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?|",
+        //     r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+[\p{Ll}\p{Lm}\p{Lo}\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?|",
+        //     r"\p{N}{1,3}|",
+        //     r" ?[^\s\p{L}\p{N}]+[\r\n/]*|",
+        //     r"\s*[\r\n]+", //"|",
+        // //    r"\s+(?!\S)|",
+        // //    r"\s+"
+        // );
 
-        let regex = reg::new(&pat_str).unwrap();
+        // let regex = reg::new(&pat_str).unwrap();
 
         let mut ret = vec![];
         let mut last_end = 0;
@@ -273,7 +273,7 @@ impl CoreBPE {
 
             // Okay, here we go, compare this logic to _encode_ordinary_native
             for mat in regex.find_iter(&text[start..end]) {
-                let piece = mat.unwrap().as_str().as_bytes();
+                let piece = mat.as_str().as_bytes();
                 if let Some(token) = self.encoder.get(piece) {
                     last_piece_token_len = 1;
                     ret.push(*token);
@@ -466,7 +466,7 @@ impl CoreBPE {
         special_tokens_encoder: HashMap<String, Rank>,
         pattern: &str,
     ) -> PyResult<Self> {
-        let regex = Regex::new(pattern)
+        let regex = reg::new(pattern)
             .map_err(|e| PyErr::new::<exceptions::PyValueError, _>(e.to_string()))?;
 
         let special_regex = {
