@@ -187,6 +187,11 @@ impl CoreBPE {
         // This is the core of the encoding logic; the other functions in here
         // just make things complicated :-)
         // let regex = self._get_tl_regex();
+
+        let first_1000_chars: String = text.chars().take(1000).collect();
+    
+        println!("{}", first_1000_chars);
+
         let p1f = r"[^\r\n\p{L}\p{N}][\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*[\p{Ll}\p{Lm}\p{Lo}\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?";
         let p2f = r"[^\r\n\p{L}\p{N}][\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+[\p{Ll}\p{Lm}\p{Lo}\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?";
         let p4f = r" [^\s\p{L}\p{N}]+[\r\n/]*";
@@ -203,8 +208,9 @@ impl CoreBPE {
             format!("({})({})", r"\s+", p2f),
             r"\s+",
         );
+        println!("{}", &pat_str);
         let regex = reg::new(&pat_str).unwrap();
-        // .map_err(|e| PyErr::new::<exceptions::PyValueError, _>(e.to_string()));
+            // .map_err(|e| PyErr::new::<exceptions::PyValueError, _>(e.to_string()))?;
 
         let mut i = 0;
         let mut ret = vec![];
@@ -213,6 +219,7 @@ impl CoreBPE {
                 i += 1;
                 if let Some(mat0) = caps.get(0) {
                     let piece0 = mat0.as_str().as_bytes();
+                    // println!("{}", &caps[0]);
                     match self.encoder.get(piece0) {
                         Some(token) => ret.push(*token),
                         None => ret.extend(&byte_pair_encode(piece0, &self.encoder)),
@@ -221,6 +228,7 @@ impl CoreBPE {
             } else {
                 if let Some(mat1) = caps.get(1) {
                     i += 1;
+                    // println!("{}", &caps[1]);
                     let piece1 = mat1.as_str().as_bytes();
                     match self.encoder.get(piece1) {
                         Some(token) => ret.push(*token),
@@ -230,6 +238,7 @@ impl CoreBPE {
 
                 if let Some(mat2) = caps.get(2) {
                     i += 1;
+                    // println!("{}", &caps[2]);
                     let piece2 = mat2.as_str().as_bytes();
                     match self.encoder.get(piece2) {
                         Some(token) => ret.push(*token),
