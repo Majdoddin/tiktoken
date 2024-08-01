@@ -6,6 +6,8 @@ use std::num::NonZeroU64;
 use std::thread;
 
 use fancy_regex::Regex;
+use regex::Regex as reg;
+
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::pyclass;
@@ -185,10 +187,57 @@ impl CoreBPE {
     fn _encode_ordinary_native(&self, text: &str) -> Vec<Rank> {
         // This is the core of the encoding logic; the other functions in here
         // just make things complicated :-)
-        let regex = self._get_tl_regex();
+        // let regex = self._get_tl_regex();
+        let pat_str = concat!(
+            r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*[\p{Ll}\p{Lm}\p{Lo}\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?|",
+            r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+[\p{Ll}\p{Lm}\p{Lo}\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?|",
+            r"\p{N}{1,3}|",
+            r" ?[^\s\p{L}\p{N}]+[\r\n/]*|",
+            r"\s*[\r\n]+", //"|",
+        //    r"\s+(?!\S)|",
+        //    r"\s+"
+        );
+
+        let regex = reg::new(&pat_str).unwrap();
+
         let mut ret = vec![];
+        let mut last_end = 0;
+
         for mat in regex.find_iter(text) {
-            let piece = mat.unwrap().as_str().as_bytes();
+            let piece = mat.as_str().as_bytes();
+            let start = mat.start();
+            let end = mat.end();
+
+            if last_end < start {
+                if mat.as_str().chars().next().map_or(false, |c| c.is_whitespace()) {
+                    let wpiece = text[last_end..start].as_bytes();
+                    match self.encoder.get(wpiece) {
+                        Some(token) => ret.push(*token),
+                        None => ret.extend(&byte_pair_encode(wpiece, &self.encoder)),
+                    }
+                    // ret.push(&text[last_end..start]);
+                } else {
+                    let last_char_size = &text[last_end..start].chars().next_back().unwrap().len_utf8();
+                    if last_char_size < &(start - last_end) {  //example "= 6", 6 is mat
+                        let wpiece1 = text[last_end..start - last_char_size].as_bytes();
+                        match self.encoder.get(wpiece1) {
+                            Some(token) => ret.push(*token),
+                            None => ret.extend(&byte_pair_encode(wpiece1, &self.encoder)),
+                    }
+                        // ret.push(&text[last_end..start - last_char_size]);
+                    }
+                    let wpiece2 = text[start - last_char_size..start].as_bytes();
+                    match self.encoder.get(wpiece2) {
+                        Some(token) => ret.push(*token),
+                        None => ret.extend(&byte_pair_encode(wpiece2, &self.encoder)),
+                    }
+                    // ret.push(&text[start - last_char_size..start]);
+                }
+                // println!("Skipped part: '{}'", &text[last_end..start]);
+            }
+            // ret.push(&text[start..end]);
+
+            last_end = end;
             match self.encoder.get(piece) {
                 Some(token) => ret.push(*token),
                 None => ret.extend(&byte_pair_encode(piece, &self.encoder)),
