@@ -155,13 +155,13 @@ struct CoreBPE {
     special_tokens_encoder: HashMap<String, Rank>,
     decoder: HashMap<Rank, Vec<u8>>,
     special_tokens_decoder: HashMap<Rank, Vec<u8>>,
-    regex_tls: Vec<Regex>,
+    regex_tls: Vec<reg>,
     special_regex_tls: Vec<Regex>,
     sorted_token_bytes: Vec<Vec<u8>>,
 }
 
 impl CoreBPE {
-    fn _get_tl_regex(&self) -> &Regex {
+    fn _get_tl_regex(&self) -> &reg {
         // See performance notes above for what this is about
         // It's also a little janky, please make a better version of it!
         // However, it's nice that this doesn't leak memory to short-lived threads
@@ -192,8 +192,7 @@ impl CoreBPE {
         let mut ret = vec![];
         let mut last_end = 0;
 
-        for result in regex.find_iter(text) {
-            let mat = result.unwrap();
+        for mat in regex.find_iter(text) {
             let piece = mat.as_str().as_bytes();
             let start = mat.start();
             let end = mat.end();
@@ -270,7 +269,7 @@ impl CoreBPE {
 
             // Okay, here we go, compare this logic to _encode_ordinary_native
             for mat in regex.find_iter(&text[start..end]) {
-                let piece = mat.unwrap().as_str().as_bytes();
+                let piece = mat.as_str().as_bytes();
                 if let Some(token) = self.encoder.get(piece) {
                     last_piece_token_len = 1;
                     ret.push(*token);
@@ -463,7 +462,7 @@ impl CoreBPE {
         special_tokens_encoder: HashMap<String, Rank>,
         pattern: &str,
     ) -> PyResult<Self> {
-        let regex = Regex::new(pattern)
+        let regex = reg::new(pattern)
             .map_err(|e| PyErr::new::<exceptions::PyValueError, _>(e.to_string()))?;
 
         let special_regex = {
