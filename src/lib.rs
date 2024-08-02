@@ -6,7 +6,7 @@ use std::num::NonZeroU64;
 use std::thread;
 
 use fancy_regex::Regex;
-// use regex::Regex as reg;
+use regex::Regex as reg;
 
 use pyo3::exceptions;
 use pyo3::prelude::*;
