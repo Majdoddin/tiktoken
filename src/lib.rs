@@ -243,6 +243,13 @@ impl CoreBPE {
                 None => ret.extend(&byte_pair_encode(piece, &self.encoder)),
             }
         }
+        if last_end < text.len() {
+            let lpiece = text[last_end..text.len()].as_bytes();
+            match self.encoder.get(lpiece) {
+                Some(token) => ret.push(*token),
+                None => ret.extend(&byte_pair_encode(lpiece, &self.encoder)),
+            }
+        }
         ret
     }
 

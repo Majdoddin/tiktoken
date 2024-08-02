@@ -20,7 +20,7 @@ def gpt2():
         # The pattern in the original GPT-2 release is:
         # r"""'s|'t|'re|'ve|'m|'ll|'d| ?[\p{L}]+| ?[\p{N}]+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
         # This is equivalent, but executes faster:
-        "pat_str": r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""",
+        "pat_str": r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+""",
         "mergeable_ranks": mergeable_ranks,
         "special_tokens": {ENDOFTEXT: 50256},
     }
@@ -34,7 +34,7 @@ def r50k_base():
     return {
         "name": "r50k_base",
         "explicit_n_vocab": 50257,
-        "pat_str": r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""",
+        "pat_str": r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+""",
         "mergeable_ranks": mergeable_ranks,
         "special_tokens": {ENDOFTEXT: 50256},
     }
@@ -48,7 +48,7 @@ def p50k_base():
     return {
         "name": "p50k_base",
         "explicit_n_vocab": 50281,
-        "pat_str": r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""",
+        "pat_str": r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+""",
         "mergeable_ranks": mergeable_ranks,
         "special_tokens": {ENDOFTEXT: 50256},
     }
@@ -62,7 +62,7 @@ def p50k_edit():
     special_tokens = {ENDOFTEXT: 50256, FIM_PREFIX: 50281, FIM_MIDDLE: 50282, FIM_SUFFIX: 50283}
     return {
         "name": "p50k_edit",
-        "pat_str": r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""",
+        "pat_str": r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+""",
         "mergeable_ranks": mergeable_ranks,
         "special_tokens": special_tokens,
     }
@@ -82,7 +82,7 @@ def cl100k_base():
     }
     return {
         "name": "cl100k_base",
-        "pat_str": r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+""",
+        "pat_str": r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]""",
         "mergeable_ranks": mergeable_ranks,
         "special_tokens": special_tokens,
     }
@@ -104,9 +104,7 @@ def o200k_base():
             r"""[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+[\p{Ll}\p{Lm}\p{Lo}\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?""",
             r"""\p{N}{1,3}""",
             r""" ?[^\s\p{L}\p{N}]+[\r\n/]*""",
-            r"""\s*[\r\n]+""",
-            r"""\s+(?!\S)""",
-            r"""\s+""",
+            r"""\s*[\r\n]+"""
         ]
     )
     return {
