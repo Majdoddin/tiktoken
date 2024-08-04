@@ -5,9 +5,8 @@ use std::collections::HashSet;
 use std::num::NonZeroU64;
 use std::thread;
 
-use fancy_regex::Regex;
-use regex::Regex as reg;
-
+use fancy_regex::Regex as FancyRegex;
+use regex::Regex as Regex;
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::pyclass;
@@ -155,20 +154,20 @@ struct CoreBPE {
     special_tokens_encoder: HashMap<String, Rank>,
     decoder: HashMap<Rank, Vec<u8>>,
     special_tokens_decoder: HashMap<Rank, Vec<u8>>,
-    regex_tls: Vec<reg>,
-    special_regex_tls: Vec<Regex>,
+    regex_tls: Vec<Regex>,
+    special_regex_tls: Vec<FancyRegex>,
     sorted_token_bytes: Vec<Vec<u8>>,
 }
 
 impl CoreBPE {
-    fn _get_tl_regex(&self) -> &reg {
+    fn _get_tl_regex(&self) -> &Regex {
         // See performance notes above for what this is about
         // It's also a little janky, please make a better version of it!
         // However, it's nice that this doesn't leak memory to short-lived threads
         &self.regex_tls[hash_current_thread() % MAX_NUM_THREADS]
     }
 
-    fn _get_tl_special_regex(&self) -> &Regex {
+    fn _get_tl_special_regex(&self) -> &FancyRegex {
         &self.special_regex_tls[hash_current_thread() % MAX_NUM_THREADS]
     }
 
@@ -185,19 +184,25 @@ impl CoreBPE {
     }
 
     fn _encode_ordinary_native(&self, text: &str) -> Vec<Rank> {
+        // This wrapper function is needed for those callers that do not pass ret.
+        let mut ret = vec![];
+        self._encode_ordinary_native_impl(text, &mut ret);
+        ret
+    }
+
+    fn _encode_ordinary_native_impl(&self, text: &str, ret: &mut Vec<Rank>) -> usize {
         // This is the core of the encoding logic; the other functions in here
         // just make things complicated :-)
         let regex = self._get_tl_regex();
-
-        let mut ret = vec![];
         let mut last_end = 0;
-
+        let mut last_piece_token_len = 0;
+        let mut piece:&[u8] = &[];
         for mat in regex.find_iter(text) {
-            let piece = mat.as_str().as_bytes();
+            piece = mat.as_str().as_bytes();
             let start = mat.start();
             let end = mat.end();
-            // Check if there is a gap between peice and the previous piece
-            // The gap consists only of whitespace chars
+
+            // If there is a whitespace gap between peice and the previous piece, add its tokens
             if last_end < start {
                 // If current piece starts with a whitespace, the whole gap is one new piece
                 if mat.as_str().chars().next().map_or(false, |c| c.is_whitespace()) {
@@ -206,7 +211,7 @@ impl CoreBPE {
                         Some(token) => ret.push(*token),
                         None => ret.extend(&byte_pair_encode(wpiece, &self.encoder)),
                     }
-                // otherwise the last char of gap makes a piece, the rest (if any) makes another piece
+                // otherwise the last char of gap makes a piece, and the rest (if any) makes another piece
                 } else {
                     let last_char_size = &text[last_end..start].chars().next_back().unwrap().len_utf8();
                     // Example for gpt4-o: for text "= 6", "=" and "6" are matches, " " is the gap,
@@ -226,6 +231,8 @@ impl CoreBPE {
                 }
             }
             last_end = end;
+
+            // Now add piece tokens
             match self.encoder.get(piece) {
                 Some(token) => ret.push(*token),
                 None => ret.extend(&byte_pair_encode(piece, &self.encoder)),
@@ -233,13 +240,22 @@ impl CoreBPE {
         }
         // Gap of whitespaces at the end of text
         if last_end < text.len() {
-            let lpiece = text[last_end..text.len()].as_bytes();
-            match self.encoder.get(lpiece) {
+            piece = text[last_end..text.len()].as_bytes();
+            match self.encoder.get(piece) {
                 Some(token) => ret.push(*token),
-                None => ret.extend(&byte_pair_encode(lpiece, &self.encoder)),
+                None => ret.extend(&byte_pair_encode(piece, &self.encoder)),
             }
         }
-        ret
+
+        if !piece.is_empty() {
+            last_piece_token_len =
+            match self.encoder.get(piece){
+                Some(token) =>  1,
+                None => byte_pair_encode(piece, &self.encoder).len()
+            };
+        };
+
+        last_piece_token_len
     }
 
     fn _encode_native(&self, text: &str, allowed_special: &HashSet<&str>) -> (Vec<Rank>, usize) {
@@ -266,18 +282,8 @@ impl CoreBPE {
                 }
             }
             let end = next_special.map_or(text.len(), |m| m.start());
-
-            // Okay, here we go, compare this logic to _encode_ordinary_native
-            for mat in regex.find_iter(&text[start..end]) {
-                let piece = mat.as_str().as_bytes();
-                if let Some(token) = self.encoder.get(piece) {
-                    last_piece_token_len = 1;
-                    ret.push(*token);
-                    continue;
-                }
-                let tokens = byte_pair_encode(piece, &self.encoder);
-                last_piece_token_len = tokens.len();
-                ret.extend(&tokens);
+            if end > start {
+                last_piece_token_len = self._encode_ordinary_native_impl(&text[start..end], &mut ret);
             }
 
             match next_special {
@@ -462,7 +468,7 @@ impl CoreBPE {
         special_tokens_encoder: HashMap<String, Rank>,
         pattern: &str,
     ) -> PyResult<Self> {
-        let regex = reg::new(pattern)
+        let regex = Regex::new(pattern)
             .map_err(|e| PyErr::new::<exceptions::PyValueError, _>(e.to_string()))?;
 
         let special_regex = {
@@ -470,7 +476,7 @@ impl CoreBPE {
                 .keys()
                 .map(|s| fancy_regex::escape(s))
                 .collect::<Vec<_>>();
-            Regex::new(&_parts.join("|"))
+            FancyRegex::new(&_parts.join("|"))
                 .map_err(|e| PyErr::new::<exceptions::PyValueError, _>(e.to_string()))?
         };
 

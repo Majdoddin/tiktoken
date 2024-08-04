@@ -7,6 +7,7 @@ FIM_SUFFIX = "<|fim_suffix|>"
 ENDOFPROMPT = "<|endofprompt|>"
 
 
+# We drop |\s+(?!\S)|\s+ from end of all patterns, implementing it with scripting in src/lib.rs, to make the patterns compatible with Rust's Regex module
 def gpt2():
     mergeable_ranks = data_gym_to_mergeable_bpe_ranks(
         vocab_bpe_file="https://openaipublic.blob.core.windows.net/gpt-2/encodings/main/vocab.bpe",
@@ -82,6 +83,9 @@ def cl100k_base():
     }
     return {
         "name": "cl100k_base",
+        # The original pattern uses possessive quantifiers ?+ and ++ which seem to be not supported by Rust's Regex module:
+        # r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
+        # It turns out that using the greedy version of quantifiers, we get a mathematically equivallent pattern:
         "pat_str": r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]""",
         "mergeable_ranks": mergeable_ranks,
         "special_tokens": special_tokens,
@@ -104,7 +108,7 @@ def o200k_base():
             r"""[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+[\p{Ll}\p{Lm}\p{Lo}\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?""",
             r"""\p{N}{1,3}""",
             r""" ?[^\s\p{L}\p{N}]+[\r\n/]*""",
-            r"""\s*[\r\n]+"""
+            r"""\s*[\r\n]+""",
         ]
     )
     return {
