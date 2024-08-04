@@ -90,7 +90,7 @@ pub fn byte_pair_split<'a>(piece: &'a [u8], ranks: &HashMap<Vec<u8>, Rank>) -> V
         .collect()
 }
 
-// Various performance notes:
+// Various performance notes (should be updated, also PERFORMANCE.md is removed now):
 //
 // Regex
 // =====
@@ -260,7 +260,6 @@ impl CoreBPE {
 
     fn _encode_native(&self, text: &str, allowed_special: &HashSet<&str>) -> (Vec<Rank>, usize) {
         let special_regex = self._get_tl_special_regex();
-        let regex = self._get_tl_regex();
         let mut ret = vec![];
 
         let mut start = 0;
@@ -283,6 +282,7 @@ impl CoreBPE {
             }
             let end = next_special.map_or(text.len(), |m| m.start());
             if end > start {
+                // regex is not created and passed here, but it seems harmless.
                 last_piece_token_len = self._encode_ordinary_native_impl(&text[start..end], &mut ret);
             }
 
