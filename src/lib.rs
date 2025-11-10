@@ -133,6 +133,7 @@ impl BytePairEncode {
             }
             idx = k - 1;
         }
+        result.reverse();
         result
     }
 }
