@@ -8,7 +8,7 @@ use pyo3::{
 };
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::{CoreBPE, Rank, byte_pair_encode};
+use crate::{CoreBPE, Rank, BytePairEncode};
 
 #[pymethods]
 impl CoreBPE {
@@ -104,7 +104,8 @@ impl CoreBPE {
                         match self.encoder.get(&unstable_bytes) {
                             Some(token) => tokens.push(*token),
                             None => {
-                                tokens.extend(&byte_pair_encode(&unstable_bytes, &self.encoder))
+                                let mut encoder = BytePairEncode::new();
+                                tokens.extend(&encoder.byte_pair_encode(&unstable_bytes, &self.encoder))
                             }
                         }
                     }
@@ -146,7 +147,8 @@ impl CoreBPE {
         if let Some(token) = self.encoder.get(piece) {
             return vec![*token];
         }
-        byte_pair_encode(piece, &self.encoder)
+        let mut encoder = BytePairEncode::new();
+        encoder.byte_pair_encode(piece, &self.encoder)
     }
 
     // ====================
