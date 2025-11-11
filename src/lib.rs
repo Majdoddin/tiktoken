@@ -310,6 +310,7 @@ impl CoreBPE {
         let special_regex = self._get_tl_special_regex();
         let regex = self._get_tl_regex();
         let mut ret = vec![];
+        let mut encoder = BytePairEncode::new();
 
         let mut start = 0;
         let mut last_piece_token_len = 0;
@@ -330,7 +331,6 @@ impl CoreBPE {
                 }
             }
             let end = next_special.map_or(text.len(), |m| m.start());
-            let mut encoder = BytePairEncode::new();
 
             // Okay, here we go, compare this logic to encode_ordinary
             for mat_res in regex.find_iter(&text[start..end]) {
